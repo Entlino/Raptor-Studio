@@ -1,4 +1,4 @@
-name: Universal Deploy to Plesk
+name: Deploy Static Website to Plesk
 on:
   push:
     branches: [ main ]
@@ -9,41 +9,14 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
-
-      - name: Detect build step
-        id: detect
-        run: |
-          if [ -f package.json ] && grep -q '"build"' package.json; then
-            echo "build_needed=true" >> $GITHUB_OUTPUT
-          else
-            echo "build_needed=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Setup Node
-        if: steps.detect.outputs.build_needed == 'true'
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Build project
-        if: steps.detect.outputs.build_needed == 'true'
-        run: |
-          npm ci
-          npm run build
 
       - name: Prepare deploy folder
         run: |
           rm -rf out
-          mkdir -p out
-          if [ "${{ steps.detect.outputs.build_needed }}" = "true" ]; then
-            if [ -d dist ]; then rsync -a dist/ out/; fi
-            if [ -d build ]; then rsync -a build/ out/; fi
-          else
-            rsync -a ./ out/ --exclude '.git' --exclude '.github' --exclude 'out'
-          fi
+          mkdir out
+          rsync -a ./ out/ --exclude '.git' --exclude '.github' --exclude 'out'
 
       - name: Publish to deploy branch
         run: |
