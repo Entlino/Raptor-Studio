@@ -3,52 +3,48 @@ on:
   push:
     branches: [ main ]
 
+permissions:
+  contents: write
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
-      # Prüfe, ob ein Node-Build nötig ist (package.json + "build"-Script)
       - name: Detect build step
         id: detect
         run: |
-          if [ -f package.json ] && jq -e '.scripts.build' package.json > /dev/null 2>&1; then
+          if [ -f package.json ] && grep -q '"build"' package.json; then
             echo "build_needed=true" >> $GITHUB_OUTPUT
           else
             echo "build_needed=false" >> $GITHUB_OUTPUT
           fi
 
-      # Falls Build nötig (z. B. Vite/React)
-      - name: Build (Node)
+      - name: Setup Node
         if: steps.detect.outputs.build_needed == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: npm ci && npm run build
+
+      - name: Build project
         if: steps.detect.outputs.build_needed == 'true'
         run: |
           npm ci
           npm run build
 
-      # Deployment-Ordner vorbereiten
       - name: Prepare deploy folder
         run: |
           rm -rf out
           mkdir -p out
           if [ "${{ steps.detect.outputs.build_needed }}" = "true" ]; then
-            # Vite/CRA: dist/ oder build/
-            if [ -d dist ]; then cp -r dist/* out/; fi
-            if [ -d build ]; then cp -r build/* out/; fi
+            if [ -d dist ]; then rsync -a dist/ out/; fi
+            if [ -d build ]; then rsync -a build/ out/; fi
           else
-            # Vanilla: alles wie es ist
-            shopt -s dotglob
-            cp -r * out/
-            # CI-Artefakte ausschließen
-            rm -rf out/.git out/.github || true
+            rsync -a ./ out/ --exclude '.git' --exclude '.github' --exclude 'out'
           fi
 
-      # In den Branch "deploy" pushen (wird beim ersten Mal automatisch erstellt)
       - name: Publish to deploy branch
         run: |
           cd out
